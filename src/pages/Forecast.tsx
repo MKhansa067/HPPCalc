@@ -2,9 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Minus, Package, AlertTriangle, CheckCircle } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import {
   Select,
   SelectContent,
@@ -12,9 +10,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { getProducts, getSales } from '@/lib/store';
+import { getProducts } from '@/lib/store';
 import { calculateForecast } from '@/lib/forecast';
-import { formatNumber, formatCurrency } from '@/lib/hpp-calculator';
+import { formatNumber } from '@/lib/hpp-calculator';
 import type { Product, ForecastResult } from '@/types';
 import {
   AreaChart,
@@ -32,20 +30,33 @@ const Forecast: React.FC = () => {
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [horizonDays, setHorizonDays] = useState(30);
   const [forecast, setForecast] = useState<ForecastResult | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadedProducts = getProducts();
-    setProducts(loadedProducts);
-    if (loadedProducts.length > 0) {
-      setSelectedProductId(loadedProducts[0].id);
-    }
+    const loadData = async () => {
+      try {
+        const loadedProducts = await getProducts();
+        setProducts(loadedProducts);
+        if (loadedProducts.length > 0) {
+          setSelectedProductId(loadedProducts[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
   }, []);
 
   useEffect(() => {
-    if (selectedProductId) {
-      const result = calculateForecast(selectedProductId, horizonDays);
-      setForecast(result);
-    }
+    const loadForecast = async () => {
+      if (selectedProductId) {
+        const result = await calculateForecast(selectedProductId, horizonDays);
+        setForecast(result);
+      }
+    };
+    loadForecast();
   }, [selectedProductId, horizonDays]);
 
   const getTrendIcon = (trend: 'up' | 'down' | 'stable') => {
@@ -68,6 +79,14 @@ const Forecast: React.FC = () => {
     date: new Date(f.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }),
     quantity: f.quantity,
   })) || [];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
