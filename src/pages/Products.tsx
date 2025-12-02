@@ -44,6 +44,7 @@ const Products: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -54,9 +55,23 @@ const Products: React.FC = () => {
     ingredients: [] as ProductIngredient[],
   });
 
+  const loadData = async () => {
+    try {
+      const [loadedProducts, loadedMaterials] = await Promise.all([
+        getProducts(),
+        getMaterials()
+      ]);
+      setProducts(loadedProducts);
+      setMaterials(loadedMaterials);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setProducts(getProducts());
-    setMaterials(getMaterials());
+    loadData();
   }, []);
 
   const filteredProducts = products.filter(p =>
@@ -108,7 +123,7 @@ const Products: React.FC = () => {
     setFormData({ ...formData, ingredients: newIngredients });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name.trim()) {
@@ -124,21 +139,21 @@ const Products: React.FC = () => {
     const validIngredients = formData.ingredients.filter(i => i.materialId && i.quantity > 0);
 
     if (editingProduct) {
-      updateProduct(editingProduct.id, { ...formData, ingredients: validIngredients });
+      await updateProduct(editingProduct.id, { ...formData, ingredients: validIngredients });
       toast({ title: 'Berhasil', description: 'Produk berhasil diperbarui' });
     } else {
-      addProduct({ ...formData, ingredients: validIngredients });
+      await addProduct({ ...formData, ingredients: validIngredients });
       toast({ title: 'Berhasil', description: 'Produk berhasil ditambahkan' });
     }
 
-    setProducts(getProducts());
+    await loadData();
     setIsDialogOpen(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      deleteProduct(deleteId);
-      setProducts(getProducts());
+      await deleteProduct(deleteId);
+      await loadData();
       toast({ title: 'Berhasil', description: 'Produk berhasil dihapus' });
       setDeleteId(null);
     }
@@ -191,6 +206,14 @@ const Products: React.FC = () => {
       </div>
     ), className: 'w-24' },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
