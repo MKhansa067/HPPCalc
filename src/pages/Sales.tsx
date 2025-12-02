@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Search, Calendar, Download } from 'lucide-react';
+import { Plus, Trash2, Search, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { DataTable } from '@/components/ui/data-table';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ const Sales: React.FC = () => {
   const [search, setSearch] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -49,19 +50,29 @@ const Sales: React.FC = () => {
     soldAt: new Date().toISOString().split('T')[0],
   });
 
-  useEffect(() => {
-    const loadedProducts = getProducts();
-    setProducts(loadedProducts);
-    
-    let loadedSales = getSales();
-    
-    // Generate demo data if no sales and there are products
-    if (loadedSales.length === 0 && loadedProducts.length > 0) {
-      generateDemoSales(loadedProducts);
-      loadedSales = getSales();
+  const loadData = async () => {
+    try {
+      const loadedProducts = await getProducts();
+      setProducts(loadedProducts);
+      
+      let loadedSales = await getSales();
+      
+      // Generate demo data if no sales and there are products
+      if (loadedSales.length === 0 && loadedProducts.length > 0) {
+        await generateDemoSales(loadedProducts);
+        loadedSales = await getSales();
+      }
+      
+      setSales(loadedSales);
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    setSales(loadedSales);
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   const getProductName = (productId: string) => {
@@ -83,7 +94,7 @@ const Sales: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.productId) {
@@ -91,20 +102,20 @@ const Sales: React.FC = () => {
       return;
     }
 
-    addSale({
+    await addSale({
       ...formData,
       soldAt: new Date(formData.soldAt),
     });
     
-    setSales(getSales());
+    await loadData();
     toast({ title: 'Berhasil', description: 'Penjualan berhasil ditambahkan' });
     setIsDialogOpen(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      deleteSale(deleteId);
-      setSales(getSales());
+      await deleteSale(deleteId);
+      await loadData();
       toast({ title: 'Berhasil', description: 'Penjualan berhasil dihapus' });
       setDeleteId(null);
     }
@@ -143,6 +154,14 @@ const Sales: React.FC = () => {
       </Button>
     ), className: 'w-16' },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
