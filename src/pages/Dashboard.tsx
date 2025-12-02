@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { 
   Package, 
@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { getMaterials, getProducts, getSales, generateDemoSales } from '@/lib/store';
 import { formatCurrency, formatNumber } from '@/lib/hpp-calculator';
+import type { Product, Material, Sale } from '@/types';
 import {
   AreaChart,
   Area,
@@ -28,17 +29,40 @@ import {
 } from 'recharts';
 
 const Dashboard: React.FC = () => {
-  const materials = getMaterials();
-  const products = getProducts();
-  const sales = getSales();
+  const [materials, setMaterials] = useState<Material[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Generate demo sales if no sales exist and there are products
-  React.useEffect(() => {
-    if (products.length > 0 && sales.length === 0) {
-      generateDemoSales(products);
-      window.location.reload();
-    }
-  }, [products.length, sales.length]);
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [loadedMaterials, loadedProducts, loadedSales] = await Promise.all([
+          getMaterials(),
+          getProducts(),
+          getSales()
+        ]);
+        
+        setMaterials(loadedMaterials);
+        setProducts(loadedProducts);
+        
+        // Generate demo sales if no sales exist and there are products
+        if (loadedProducts.length > 0 && loadedSales.length === 0) {
+          await generateDemoSales(loadedProducts);
+          const newSales = await getSales();
+          setSales(newSales);
+        } else {
+          setSales(loadedSales);
+        }
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadData();
+  }, []);
 
   // Calculate stats
   const stats = useMemo(() => {
@@ -98,6 +122,14 @@ const Dashboard: React.FC = () => {
 
     return performance.sort((a, b) => b.revenue - a.revenue).slice(0, 5);
   }, [products, sales]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
