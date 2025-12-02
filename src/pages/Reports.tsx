@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { FileSpreadsheet, Download, Calendar, Package } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,32 +17,97 @@ import { getProducts, getSales } from '@/lib/store';
 import { calculateHPP, formatCurrency, formatNumber } from '@/lib/hpp-calculator';
 import { calculateForecast } from '@/lib/forecast';
 import { exportToExcel } from '@/lib/excel-export';
-import type { Product, Sale } from '@/types';
+import type { Product, Sale, HPPResult } from '@/types';
 
 const Reports: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [sales, setSales] = useState<Sale[]>([]);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [isExporting, setIsExporting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [previewStats, setPreviewStats] = useState<{
+    hpp: number;
+    suggestedPrice: number;
+    totalTransactions: number;
+    totalUnits: number;
+    totalRevenue: number;
+    totalCost: number;
+    profit: number;
+    profitMargin: number;
+  } | null>(null);
 
   useEffect(() => {
-    const loadedProducts = getProducts();
-    setProducts(loadedProducts);
-    if (loadedProducts.length > 0) {
-      setSelectedProductId(loadedProducts[0].id);
-    }
+    const loadData = async () => {
+      try {
+        const [loadedProducts, loadedSales] = await Promise.all([
+          getProducts(),
+          getSales()
+        ]);
+        setProducts(loadedProducts);
+        setSales(loadedSales);
+        if (loadedProducts.length > 0) {
+          setSelectedProductId(loadedProducts[0].id);
+        }
 
-    // Set default dates (last 30 days)
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30);
-    
-    setEndDate(end.toISOString().split('T')[0]);
-    setStartDate(start.toISOString().split('T')[0]);
+        // Set default dates (last 30 days)
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 30);
+        
+        setEndDate(end.toISOString().split('T')[0]);
+        setStartDate(start.toISOString().split('T')[0]);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
   }, []);
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
+
+  // Calculate preview stats when dependencies change
+  useEffect(() => {
+    const calculatePreview = async () => {
+      if (!selectedProduct || !startDate || !endDate) {
+        setPreviewStats(null);
+        return;
+      }
+
+      const hpp = await calculateHPP(selectedProduct);
+      
+      const periodStart = new Date(startDate);
+      const periodEnd = new Date(endDate);
+      
+      const filteredSales = sales.filter(s => {
+        if (s.productId !== selectedProductId) return false;
+        const saleDate = new Date(s.soldAt);
+        return saleDate >= periodStart && saleDate <= periodEnd;
+      });
+
+      const totalRevenue = filteredSales.reduce((sum, s) => sum + s.quantity * s.unitPrice, 0);
+      const totalUnits = filteredSales.reduce((sum, s) => sum + s.quantity, 0);
+      const totalCost = totalUnits * hpp.breakdown.hppPerUnit;
+      const profit = totalRevenue - totalCost;
+      const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
+
+      setPreviewStats({
+        hpp: hpp.breakdown.hppPerUnit,
+        suggestedPrice: hpp.suggestedPrice,
+        totalTransactions: filteredSales.length,
+        totalUnits,
+        totalRevenue,
+        totalCost,
+        profit,
+        profitMargin,
+      });
+    };
+
+    calculatePreview();
+  }, [selectedProduct, selectedProductId, startDate, endDate, sales]);
 
   const handleExport = async () => {
     if (!selectedProduct) {
@@ -53,14 +118,13 @@ const Reports: React.FC = () => {
     setIsExporting(true);
 
     try {
-      const hpp = calculateHPP(selectedProduct);
-      const forecast = calculateForecast(selectedProductId, 30);
-      const allSales = getSales();
+      const hpp = await calculateHPP(selectedProduct);
+      const forecast = await calculateForecast(selectedProductId, 30);
       
       const periodStart = new Date(startDate);
       const periodEnd = new Date(endDate);
       
-      const filteredSales = allSales.filter(s => {
+      const filteredSales = sales.filter(s => {
         if (s.productId !== selectedProductId) return false;
         const saleDate = new Date(s.soldAt);
         return saleDate >= periodStart && saleDate <= periodEnd;
@@ -89,39 +153,13 @@ const Reports: React.FC = () => {
     }
   };
 
-  // Calculate preview stats
-  const previewStats = React.useMemo(() => {
-    if (!selectedProduct) return null;
-
-    const hpp = calculateHPP(selectedProduct);
-    const allSales = getSales();
-    
-    const periodStart = new Date(startDate);
-    const periodEnd = new Date(endDate);
-    
-    const filteredSales = allSales.filter(s => {
-      if (s.productId !== selectedProductId) return false;
-      const saleDate = new Date(s.soldAt);
-      return saleDate >= periodStart && saleDate <= periodEnd;
-    });
-
-    const totalRevenue = filteredSales.reduce((sum, s) => sum + s.quantity * s.unitPrice, 0);
-    const totalUnits = filteredSales.reduce((sum, s) => sum + s.quantity, 0);
-    const totalCost = totalUnits * hpp.breakdown.hppPerUnit;
-    const profit = totalRevenue - totalCost;
-    const profitMargin = totalRevenue > 0 ? (profit / totalRevenue) * 100 : 0;
-
-    return {
-      hpp: hpp.breakdown.hppPerUnit,
-      suggestedPrice: hpp.suggestedPrice,
-      totalTransactions: filteredSales.length,
-      totalUnits,
-      totalRevenue,
-      totalCost,
-      profit,
-      profitMargin,
-    };
-  }, [selectedProduct, selectedProductId, startDate, endDate]);
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
