@@ -12,13 +12,13 @@ interface HPPOverrides {
 const DEFAULT_MARGIN = 30; // 30%
 const DEFAULT_MONTHLY_PRODUCTION = 500; // units
 
-export const calculateHPP = (
+export const calculateHPP = async (
   product: Product,
   overrides: HPPOverrides = {}
-): HPPResult => {
-  const materials = getMaterials();
-  const overheads = getOverheads();
-  const laborRates = getLaborRates();
+): Promise<HPPResult> => {
+  const materials = await getMaterials();
+  const overheads = await getOverheads();
+  const laborRates = await getLaborRates();
   
   const marginPercent = overrides.marginPercent ?? DEFAULT_MARGIN;
   const monthlyProduction = overrides.monthlyProduction ?? DEFAULT_MONTHLY_PRODUCTION;
