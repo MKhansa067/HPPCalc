@@ -49,6 +49,7 @@ const Materials: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<Material | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -58,8 +59,19 @@ const Materials: React.FC = () => {
     stockAmount: 0,
   });
 
+  const loadMaterials = async () => {
+    try {
+      const data = await getMaterials();
+      setMaterials(data);
+    } catch (error) {
+      console.error('Error loading materials:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    setMaterials(getMaterials());
+    loadMaterials();
   }, []);
 
   const filteredMaterials = materials.filter(m =>
@@ -82,7 +94,7 @@ const Materials: React.FC = () => {
     setIsDialogOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!formData.name.trim()) {
@@ -91,21 +103,21 @@ const Materials: React.FC = () => {
     }
 
     if (editingMaterial) {
-      updateMaterial(editingMaterial.id, formData);
+      await updateMaterial(editingMaterial.id, formData);
       toast({ title: 'Berhasil', description: 'Bahan berhasil diperbarui' });
     } else {
-      addMaterial(formData);
+      await addMaterial(formData);
       toast({ title: 'Berhasil', description: 'Bahan berhasil ditambahkan' });
     }
 
-    setMaterials(getMaterials());
+    await loadMaterials();
     setIsDialogOpen(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (deleteId) {
-      deleteMaterial(deleteId);
-      setMaterials(getMaterials());
+      await deleteMaterial(deleteId);
+      await loadMaterials();
       toast({ title: 'Berhasil', description: 'Bahan berhasil dihapus' });
       setDeleteId(null);
     }
@@ -135,6 +147,14 @@ const Materials: React.FC = () => {
       </div>
     ), className: 'w-24' },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">
