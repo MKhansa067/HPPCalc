@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { supabase } from '../integrations/supabase/client';
+import { supabase } from '@/integrations/supabase/client';
 import type { Material, Product, ProductIngredient, Overhead, LaborRate, Sale, Unit } from '@/types';
 
 // Seed data for demo
