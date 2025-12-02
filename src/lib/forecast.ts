@@ -1,16 +1,17 @@
-import type { Sale, Product, ForecastResult } from '@/types';
+import type { Sale, Product, ForecastResult, Material } from '@/types';
 import { getSales, getMaterials, getProducts } from './store';
 
-export const calculateForecast = (
+export const calculateForecast = async (
   productId: string,
   horizonDays: number = 30,
   safetyDays: number = 7
-): ForecastResult | null => {
-  const products = getProducts();
+): Promise<ForecastResult | null> => {
+  const products = await getProducts();
   const product = products.find(p => p.id === productId);
   if (!product) return null;
   
-  const sales = getSales().filter(s => s.productId === productId);
+  const allSales = await getSales();
+  const sales = allSales.filter(s => s.productId === productId);
   
   // Get last 90 days of sales
   const now = new Date();
@@ -79,7 +80,7 @@ export const calculateForecast = (
   const totalForecast = dailyForecast.reduce((sum, d) => sum + d.quantity, 0);
   
   // Calculate current stock (simplified - sum of material stock)
-  const materials = getMaterials();
+  const materials = await getMaterials();
   const currentStock = product.ingredients.reduce((total, ing) => {
     const material = materials.find(m => m.id === ing.materialId);
     if (!material) return total;
