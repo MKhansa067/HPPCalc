@@ -2,34 +2,21 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '@/integrations/supabase/client';
 import type { Material, Product, ProductIngredient, Overhead, LaborRate, Sale, Unit } from '@/types';
 
-// Seed data for demo
-const seedMaterials: Omit<Material, 'id' | 'updatedAt'>[] = [
-  { name: 'Tepung Terigu', unit: 'kg', pricePerUnit: 12000, stockAmount: 50 },
-  { name: 'Gula Pasir', unit: 'kg', pricePerUnit: 15000, stockAmount: 30 },
-  { name: 'Telur', unit: 'pcs', pricePerUnit: 2500, stockAmount: 200 },
-  { name: 'Mentega', unit: 'g', pricePerUnit: 80, stockAmount: 5000 },
-  { name: 'Susu UHT', unit: 'ml', pricePerUnit: 20, stockAmount: 10000 },
-  { name: 'Cokelat Bubuk', unit: 'g', pricePerUnit: 150, stockAmount: 2000 },
-  { name: 'Vanili', unit: 'g', pricePerUnit: 500, stockAmount: 500 },
-  { name: 'Baking Powder', unit: 'g', pricePerUnit: 100, stockAmount: 1000 },
-];
-
-const seedOverheads: Omit<Overhead, 'id'>[] = [
-  { name: 'Listrik & Gas', amount: 500000, allocationType: 'fixed' },
-  { name: 'Sewa Tempat', amount: 2000000, allocationType: 'fixed' },
-  { name: 'Packaging', amount: 500, allocationType: 'per_unit' },
-];
-
-const seedLaborRates: Omit<LaborRate, 'id'>[] = [
-  { name: 'Baker', wagePerHour: 25000 },
-  { name: 'Helper', wagePerHour: 15000 },
-];
+// Helper to get current user ID
+const getCurrentUserId = async (): Promise<string | null> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id ?? null;
+};
 
 // ============ MATERIALS API ============
 export const getMaterials = async (): Promise<Material[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
   const { data, error } = await supabase
     .from('materials')
     .select('*')
+    .eq('user_id', userId)
     .order('name');
 
   if (error) {
@@ -37,13 +24,7 @@ export const getMaterials = async (): Promise<Material[]> => {
     return [];
   }
 
-  // Seed if empty
-  if (!data || data.length === 0) {
-    await seedMaterialsData();
-    return getMaterials();
-  }
-
-  return data.map(m => ({
+  return (data || []).map(m => ({
     id: m.id,
     name: m.name,
     unit: m.unit as Unit,
@@ -53,24 +34,15 @@ export const getMaterials = async (): Promise<Material[]> => {
   }));
 };
 
-const seedMaterialsData = async () => {
-  const materials = seedMaterials.map(m => ({
-    id: uuidv4(),
-    name: m.name,
-    unit: m.unit,
-    price_per_unit: m.pricePerUnit,
-    stock_amount: m.stockAmount,
-  }));
-
-  const { error } = await supabase.from('materials').insert(materials);
-  if (error) console.error('Error seeding materials:', error);
-};
-
 export const addMaterial = async (material: Omit<Material, 'id' | 'updatedAt'>): Promise<Material | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
   const { data, error } = await supabase
     .from('materials')
     .insert({
       id: uuidv4(),
+      user_id: userId,
       name: material.name,
       unit: material.unit,
       price_per_unit: material.pricePerUnit,
@@ -134,12 +106,16 @@ export const deleteMaterial = async (id: string): Promise<boolean> => {
 
 // ============ PRODUCTS API ============
 export const getProducts = async (): Promise<Product[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
   const { data: products, error } = await supabase
     .from('products')
     .select(`
       *,
       product_ingredients (*)
     `)
+    .eq('user_id', userId)
     .order('name');
 
   if (error) {
@@ -147,11 +123,7 @@ export const getProducts = async (): Promise<Product[]> => {
     return [];
   }
 
-  if (!products || products.length === 0) {
-    return [];
-  }
-
-  return products.map(p => ({
+  return (products || []).map(p => ({
     id: p.id,
     name: p.name,
     description: p.description || '',
@@ -168,12 +140,16 @@ export const getProducts = async (): Promise<Product[]> => {
 };
 
 export const addProduct = async (product: Omit<Product, 'id' | 'createdAt' | 'updatedAt'>): Promise<Product | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
   const productId = uuidv4();
 
   const { data, error } = await supabase
     .from('products')
     .insert({
       id: productId,
+      user_id: userId,
       name: product.name,
       description: product.description,
       yield_per_batch: product.yieldPerBatch,
@@ -287,9 +263,13 @@ export const deleteProduct = async (id: string): Promise<boolean> => {
 
 // ============ OVERHEADS API ============
 export const getOverheads = async (): Promise<Overhead[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
   const { data, error } = await supabase
     .from('overheads')
     .select('*')
+    .eq('user_id', userId)
     .order('name');
 
   if (error) {
@@ -297,12 +277,7 @@ export const getOverheads = async (): Promise<Overhead[]> => {
     return [];
   }
 
-  if (!data || data.length === 0) {
-    await seedOverheadsData();
-    return getOverheads();
-  }
-
-  return data.map(o => ({
+  return (data || []).map(o => ({
     id: o.id,
     name: o.name,
     amount: o.amount,
@@ -310,23 +285,15 @@ export const getOverheads = async (): Promise<Overhead[]> => {
   }));
 };
 
-const seedOverheadsData = async () => {
-  const overheads = seedOverheads.map(o => ({
-    id: uuidv4(),
-    name: o.name,
-    amount: o.amount,
-    allocation_type: o.allocationType,
-  }));
-
-  const { error } = await supabase.from('overheads').insert(overheads);
-  if (error) console.error('Error seeding overheads:', error);
-};
-
 export const addOverhead = async (overhead: Omit<Overhead, 'id'>): Promise<Overhead | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
   const { data, error } = await supabase
     .from('overheads')
     .insert({
       id: uuidv4(),
+      user_id: userId,
       name: overhead.name,
       amount: overhead.amount,
       allocation_type: overhead.allocationType,
@@ -384,9 +351,13 @@ export const deleteOverhead = async (id: string): Promise<boolean> => {
 
 // ============ LABOR RATES API ============
 export const getLaborRates = async (): Promise<LaborRate[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
   const { data, error } = await supabase
     .from('labor_rates')
     .select('*')
+    .eq('user_id', userId)
     .order('name');
 
   if (error) {
@@ -394,36 +365,24 @@ export const getLaborRates = async (): Promise<LaborRate[]> => {
     return [];
   }
 
-  if (!data || data.length === 0) {
-    await seedLaborRatesData();
-    return getLaborRates();
-  }
-
-  return data.map(r => ({
+  return (data || []).map(r => ({
     id: r.id,
     name: r.name,
     wagePerHour: r.wage_per_hour,
   }));
 };
 
-const seedLaborRatesData = async () => {
-  const rates = seedLaborRates.map(r => ({
-    id: uuidv4(),
-    name: r.name,
-    wage_per_hour: r.wagePerHour,
-  }));
-
-  const { error } = await supabase.from('labor_rates').insert(rates);
-  if (error) console.error('Error seeding labor rates:', error);
-};
-
 export const saveLaborRates = async (rates: LaborRate[]): Promise<void> => {
-  // Delete all existing rates and insert new ones
-  await supabase.from('labor_rates').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  const userId = await getCurrentUserId();
+  if (!userId) return;
+
+  // Delete all existing rates for this user and insert new ones
+  await supabase.from('labor_rates').delete().eq('user_id', userId);
 
   if (rates.length > 0) {
     const newRates = rates.map(r => ({
       id: r.id || uuidv4(),
+      user_id: userId,
       name: r.name,
       wage_per_hour: r.wagePerHour,
     }));
@@ -433,9 +392,13 @@ export const saveLaborRates = async (rates: LaborRate[]): Promise<void> => {
 
 // ============ SALES API ============
 export const getSales = async (): Promise<Sale[]> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return [];
+
   const { data, error } = await supabase
     .from('sales')
     .select('*')
+    .eq('user_id', userId)
     .order('sold_at', { ascending: false });
 
   if (error) {
@@ -453,10 +416,14 @@ export const getSales = async (): Promise<Sale[]> => {
 };
 
 export const addSale = async (sale: Omit<Sale, 'id'>): Promise<Sale | null> => {
+  const userId = await getCurrentUserId();
+  if (!userId) return null;
+
   const { data, error } = await supabase
     .from('sales')
     .insert({
       id: uuidv4(),
+      user_id: userId,
       product_id: sale.productId,
       quantity: sale.quantity,
       unit_price: sale.unitPrice,
@@ -490,10 +457,12 @@ export const deleteSale = async (id: string): Promise<boolean> => {
 
 // Generate demo sales data
 export const generateDemoSales = async (products: Product[]): Promise<void> => {
-  if (products.length === 0) return;
+  const userId = await getCurrentUserId();
+  if (!userId || products.length === 0) return;
 
   const sales: {
     id: string;
+    user_id: string;
     product_id: string;
     quantity: number;
     unit_price: number;
@@ -513,6 +482,7 @@ export const generateDemoSales = async (products: Product[]): Promise<void> => {
       if (qty > 0) {
         sales.push({
           id: uuidv4(),
+          user_id: userId,
           product_id: product.id,
           quantity: qty,
           unit_price: Math.floor(Math.random() * 5000) + 15000,
